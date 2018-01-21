@@ -1,0 +1,27 @@
+---
+location:
+  source:
+    - /
+  exclude:
+    - pp:/var/tmp
+    - "*.iso"
+  exclude_if_present:
+    - .no_backup
+  exclude_caches: True
+  one_file_system: True
+remote:
+  repository: a@b:c
+  prefix: root
+  compression: lz4
+retention:
+  keep_last: 10
+  keep_within: 24H
+  keep_daily: 7
+  keep_weekly: 4
+  keep_monthly: 6
+  keep_yearly: 3
+hooks:
+  before:
+    - echo before
+  after:
+    - echo after
