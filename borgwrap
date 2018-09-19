@@ -8,7 +8,7 @@ import yaml
 
 def parse_config(filename):
     with open(filename) as f:
-        return yaml.load(f)
+        return yaml.safe_load(f)
 
 
 def config_is_true(value):
