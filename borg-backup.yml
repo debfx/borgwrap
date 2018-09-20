@@ -10,7 +10,7 @@ location:
   exclude_caches: True
   one_file_system: True
 remote:
-  repository: a@b:c
+  repository: user@hostname:/path/to/source
   prefix: root
   compression: lz4
 retention:
