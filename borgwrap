@@ -98,8 +98,9 @@ def hooks_before(config, dry_run):
 
     for hook in config["hooks"]["before"]:
         if dry_run:
-            hook = ["echo"] + hook
-        subprocess.run(hook, shell=True, check=True)
+            print("Not running hook \"{}\" as dry run is enabled.".format(hook))
+        else:
+            subprocess.run(hook, shell=True, check=True)
 
 
 def hooks_after(config, dry_run):
@@ -108,8 +109,9 @@ def hooks_after(config, dry_run):
 
     for hook in config["hooks"]["after"]:
         if dry_run:
-            hook = ["echo"] + hook
-        subprocess.run(hook, shell=True, check=True)
+            print("Not running hook \"{}\" as dry run is enabled.".format(hook))
+        else:
+            subprocess.run(hook, shell=True, check=True)
 
 
 def action_prune(config, dry_run):
