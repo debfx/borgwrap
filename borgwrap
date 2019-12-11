@@ -51,15 +51,24 @@ def action_create(config, dry_run):
     if "compression" in config["remote"]:
         cmd += ["--compression", config["remote"]["compression"]]
 
+    if "rate_limit" in config["remote"]:
+        cmd += ["--remote-ratelimit", str(config["remote"]["rate_limit"])]
+
     if "one_file_system" in config["location"] and config_is_true(config["location"]["one_file_system"]):
         cmd.append("--one-file-system")
 
     if "exclude_caches" in config["location"] and config_is_true(config["location"]["exclude_caches"]):
         cmd.append("--exclude-caches")
 
+    if "keep_exclude_tags" in config["location"] and config_is_true(config["location"]["keep_exclude_tags"]):
+        cmd.append("--keep-exclude-tags")
+
     if "exclude_if_present" in config["location"]:
         for exclude in config["location"]["exclude_if_present"]:
             cmd += ["--exclude-if-present", exclude]
+
+    if "noatime" in config["location"] and config_is_true(config["location"]["noatime"]):
+        cmd.append("--noatime")
 
     if "exclude" in config["location"]:
         for exclude in config["location"]["exclude"]:

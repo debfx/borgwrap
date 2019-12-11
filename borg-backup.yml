@@ -8,11 +8,15 @@ location:
   exclude_if_present:
     - .no_backup
   exclude_caches: True
+  keep_exclude_tags: True
   one_file_system: True
+  noatime: True
 remote:
   repository: user@hostname:/path/to/source
   prefix: root
   compression: lz4
+  # limit upload rate (in kiByte/s)
+  rate_limit: 1000
 retention:
   keep_last: 10
   keep_within: 24H
