@@ -41,7 +41,7 @@ def run(action, config, archive=False, args=[], trailing_args=[], capture_stdout
     return subprocess.run(["borgbackup", action] + args + [repo] + trailing_args, check=True, env=env, stdout=stdout, universal_newlines=True)
 
 
-def action_create(config, dry_run):
+def action_create(config, dry_run, stats):
     source = config["location"]["source"]
     if isinstance(source, str):
         source = [source]
@@ -76,6 +76,9 @@ def action_create(config, dry_run):
 
     if dry_run:
         cmd += ["--dry-run"]
+
+    if stats:
+        cmd += ["--stats"]
 
     run("create", config, archive=True, args=cmd, trailing_args=source)
 
@@ -123,12 +126,15 @@ def hooks_after(config, dry_run):
             subprocess.run(hook, shell=True, check=True)
 
 
-def action_prune(config, dry_run):
-    cmd =  ["--stats", "--list"]
+def action_prune(config, dry_run, stats):
+    cmd =  ["--list"]
     cmd += ["--prefix", config["remote"]["prefix"]]
 
     if dry_run:
         cmd += ["--dry-run"]
+
+    if stats:
+        cmd += ["--stats"]
 
     if "keep_last" in config["retention"]:
         cmd += ["--keep-last", str(config["retention"]["keep_last"])]
@@ -162,10 +168,12 @@ def main():
 
     parser_create = subparsers.add_parser("create")
     parser_create.add_argument("--no-prune", action="store_true")
+    parser_create.add_argument("--stats", action="store_true")
 
     parser_list = subparsers.add_parser("list")
 
     parser_prune = subparsers.add_parser("prune")
+    parser_prune.add_argument("--stats", action="store_true")
 
     parser_check_age = subparsers.add_parser("nagios-check-age")
     parser_check_age.add_argument("--max-age", type=int, required=True, help="Max age in hours")
@@ -177,14 +185,14 @@ def main():
 
     if args.action == "create":
         hooks_before(config, dry_run=args.dry_run)
-        action_create(config, dry_run=args.dry_run)
+        action_create(config, dry_run=args.dry_run, stats=args.stats)
         hooks_after(config, dry_run=args.dry_run)
         if not args.no_prune:
-            action_prune(config, dry_run=args.dry_run)
+            action_prune(config, dry_run=args.dry_run, stats=args.stats)
     elif args.action == "list":
         action_list(config)
     elif args.action == "prune":
-        action_prune(config, dry_run=args.dry_run)
+        action_prune(config, dry_run=args.dry_run, stats=args.stats)
     elif args.action == "nagios-check-age":
         if args.min_size:
             min_size = args.min_size * 1024 * 1024
