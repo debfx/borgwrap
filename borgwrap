@@ -104,6 +104,20 @@ def action_check_age(config, max_age, min_size):
     print("BORGBACKUP OK")
 
 
+def action_cmd(config, dry_run, raw_args):
+    env = dict(os.environ)
+    if "rsh" in config["remote"]:
+        env["BORG_RSH"] = config["remote"]["rsh"]
+    env["BORG_REPO"] = config["remote"]["repository"]
+
+    cmd = ["borgbackup"] + raw_args
+
+    if dry_run:
+        print("Not running command \"{}\" as dry run is enabled.".format(" ".join(cmd)))
+    else:
+        subprocess.run(cmd, check=True, env=env)
+
+
 def hooks_before(config, dry_run):
     if "hooks" not in config or "before" not in config["hooks"]:
         return
@@ -179,6 +193,9 @@ def main():
     parser_check_age.add_argument("--max-age", type=int, required=True, help="Max age in hours")
     parser_check_age.add_argument("--min-size", type=int, help="Min backup size in MiB")
 
+    parser_cmd = subparsers.add_parser("cmd")
+    parser_cmd.add_argument("raw", nargs="+")
+
     args = parser.parse_args()
 
     config = parse_config(args.config)
@@ -199,6 +216,9 @@ def main():
         else:
             min_size = None
         action_check_age(config, max_age=args.max_age*3600, min_size=min_size)
+    elif args.action == "cmd":
+        action_cmd(config, dry_run=args.dry_run, raw_args=args.raw)
+
 
 if __name__ == "__main__":
     main()
