@@ -93,15 +93,15 @@ def action_check_age(config, max_age, min_size):
 
     backup_start = datetime.datetime.strptime(last_backup["archives"][0]["start"], "%Y-%m-%dT%H:%M:%S.%f")
     if (datetime.datetime.now() - backup_start).total_seconds() > max_age:
-        print("BORGBACKUP WARNING: last backup too old\n\n{}".format(last_backup["archives"][0]["start"]))
+        print("BORGBACKUP WARNING: last backup too old\n\n{:%Y-%m-%dT%H:%M:%S}".format(backup_start))
         sys.exit(1)
 
-    size = last_backup["archives"][0]["stats"]["original_size"]
+    size = int(last_backup["archives"][0]["stats"]["original_size"] / 1024 / 1024)
     if min_size and size < min_size:
-        print("BORGBACKUP WARNING: last backup too small\n\n{}B < {}B".format(size, min_size))
+        print("BORGBACKUP WARNING: last backup too small\n\n{}M < {}M".format(size, min_size))
         sys.exit(1)
 
-    print("BORGBACKUP OK")
+    print("BORGBACKUP OK - last backup on: {:%Y-%m-%dT%H:%M:%S}, size: {}M".format(backup_start, size))
 
 
 def action_cmd(config, dry_run, raw_args):
@@ -212,7 +212,7 @@ def main():
         action_prune(config, dry_run=args.dry_run, stats=args.stats)
     elif args.action == "nagios-check-age":
         if args.min_size:
-            min_size = args.min_size * 1024 * 1024
+            min_size = args.min_size
         else:
             min_size = None
         action_check_age(config, max_age=args.max_age*3600, min_size=min_size)
