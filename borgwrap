@@ -122,18 +122,18 @@ def action_check_age(config, max_age, min_size):
     try:
         proc_result = run("info", config, archive=False, args=["--last", "1", "--json"], capture_stdout=True, capture_stderr=True)
     except subprocess.CalledProcessError as e:
-        print("BORGBACKUP UNKNOWN: borgbackup command failed\n\n" + e.stderr)
+        print("BORGBACKUP UNKNOWN - borgbackup command failed\n\n" + e.stderr)
         sys.exit(3)
     last_backup = yaml.safe_load(proc_result.stdout)
 
     backup_start = datetime.datetime.strptime(last_backup["archives"][0]["start"], "%Y-%m-%dT%H:%M:%S.%f")
     if (datetime.datetime.now() - backup_start).total_seconds() > max_age:
-        print("BORGBACKUP WARNING: last backup too old\n\n{:%Y-%m-%dT%H:%M:%S}".format(backup_start))
+        print("BORGBACKUP WARNING - last backup too old: {:%Y-%m-%dT%H:%M:%S}".format(backup_start))
         sys.exit(1)
 
     size = int(last_backup["archives"][0]["stats"]["original_size"] / 1024 / 1024)
     if min_size and size < min_size:
-        print("BORGBACKUP WARNING: last backup too small\n\n{}M < {}M".format(size, min_size))
+        print("BORGBACKUP WARNING - last backup too small\n\n{}M < {}M".format(size, min_size))
         sys.exit(1)
 
     print("BORGBACKUP OK - last backup on: {:%Y-%m-%dT%H:%M:%S}, size: {}M".format(backup_start, size))
