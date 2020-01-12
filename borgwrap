@@ -25,7 +25,7 @@ def config_is_true(value):
         return False
 
 
-def run(action, config, archive=False, args=[], trailing_args=[], capture_stdout=False):
+def run(action, config, archive=False, args=[], trailing_args=[], capture_stdout=False, capture_stderr=False):
     repo = config["remote"]["repository"]
     if archive:
         repo += "::{}-{{utcnow:%Y-%m-%dT%H:%M:%SZ}}".format(config["remote"]["prefix"])
@@ -39,7 +39,13 @@ def run(action, config, archive=False, args=[], trailing_args=[], capture_stdout
     else:
         stdout = None
 
-    return subprocess.run(["borgbackup", action] + args + [repo] + trailing_args, check=True, env=env, stdout=stdout, universal_newlines=True)
+    if capture_stderr:
+        stderr = subprocess.PIPE
+    else:
+        stderr = None
+
+    return subprocess.run(["borgbackup", action] + args + [repo] + trailing_args, check=True, env=env,
+                          stdout=stdout, stderr=stderr, universal_newlines=True)
 
 
 def action_create(config, dry_run, stats):
@@ -196,7 +202,10 @@ def action_prune(config, dry_run, stats):
     if "keep_yearly" in config["retention"]:
         cmd += ["--keep-yearly", str(config["retention"]["keep_yearly"])]
 
-    run("prune", config, args=cmd)
+    proc = run("prune", config, args=cmd, capture_stderr=True)
+    for line in proc.stderr.splitlines(keepends=True):
+        if not line.startswith("Keeping archive:"):
+            print(line, end="", file=sys.stderr)
 
 
 def main():
