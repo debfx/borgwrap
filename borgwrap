@@ -5,6 +5,7 @@ import datetime
 import os
 import subprocess
 import sys
+import time
 import yaml
 
 
@@ -80,7 +81,31 @@ def action_create(config, dry_run, stats):
     if stats:
         cmd += ["--stats"]
 
-    run("create", config, archive=True, args=cmd, trailing_args=source)
+    if "retries" in config["remote"]:
+        retries = int(config["remote"]["retries"])
+    else:
+        retries = 0
+
+    if "retry_wait" in config["remote"]:
+        retry_wait = int(config["remote"]["retry_wait"])
+    else:
+        retry_wait = 0
+
+    for i in range(retries + 1):
+        try:
+            run("create", config, archive=True, args=cmd, trailing_args=source)
+            break
+        except subprocess.CalledProcessError as e:
+            print("Backup creation failed with exit code {}".format(e.returncode), file=sys.stderr)
+
+            if i == retries:
+                sys.exit(e.returncode)
+
+            if retry_wait == 0:
+                print("Retrying backup ...", file=sys.stderr)
+            else:
+                print("Retrying backup after {} min ..".format(retry_wait), file=sys.stderr)
+                time.sleep(retry_wait * 60)
 
 
 def action_list(config):
