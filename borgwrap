@@ -119,7 +119,11 @@ def action_list(config):
 
 
 def action_check_age(config, max_age, min_size):
-    proc_result = run("info", config, archive=False, args=["--last", "1", "--json"], capture_stdout=True)
+    try:
+        proc_result = run("info", config, archive=False, args=["--last", "1", "--json"], capture_stdout=True, capture_stderr=True)
+    except subprocess.CalledProcessError as e:
+        print("BORGBACKUP UNKNOWN: borgbackup command failed\n\n" + e.stderr)
+        sys.exit(3)
     last_backup = yaml.safe_load(proc_result.stdout)
 
     backup_start = datetime.datetime.strptime(last_backup["archives"][0]["start"], "%Y-%m-%dT%H:%M:%S.%f")
@@ -133,6 +137,7 @@ def action_check_age(config, max_age, min_size):
         sys.exit(1)
 
     print("BORGBACKUP OK - last backup on: {:%Y-%m-%dT%H:%M:%S}, size: {}M".format(backup_start, size))
+    sys.exit(0)
 
 
 def action_cmd(config, dry_run, raw_args):
