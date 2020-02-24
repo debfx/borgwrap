@@ -102,15 +102,15 @@ def action_create(config, dry_run, stats):
             run("create", config, archive=True, args=cmd, trailing_args=source)
             break
         except subprocess.CalledProcessError as e:
-            print("Backup creation failed with exit code {}".format(e.returncode), file=sys.stderr)
+            print("Backup creation failed with exit code {}".format(e.returncode), file=sys.stderr, flush=True)
 
             if i == retries:
                 sys.exit(e.returncode)
 
             if retry_wait == 0:
-                print("Retrying backup ...", file=sys.stderr)
+                print("Retrying backup ...", file=sys.stderr, flush=True)
             else:
-                print("Retrying backup after {} min ..".format(retry_wait), file=sys.stderr)
+                print("Retrying backup after {} min ..".format(retry_wait), file=sys.stderr, flush=True)
                 time.sleep(retry_wait * 60)
 
 
