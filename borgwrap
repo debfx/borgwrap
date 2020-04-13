@@ -25,6 +25,20 @@ def config_is_true(value):
         return False
 
 
+def config_get_retries(config):
+    if "retries" in config["remote"]:
+        retries = int(config["remote"]["retries"])
+    else:
+        retries = 0
+
+    if "retry_wait" in config["remote"]:
+        retry_wait = int(config["remote"]["retry_wait"])
+    else:
+        retry_wait = 0
+
+    return retries, retry_wait
+
+
 def run(action, config, archive=False, args=[], trailing_args=[], capture_stdout=False, capture_stderr=False):
     repo = config["remote"]["repository"]
     if archive:
@@ -87,15 +101,7 @@ def action_create(config, dry_run, stats):
     if stats:
         cmd += ["--stats"]
 
-    if "retries" in config["remote"]:
-        retries = int(config["remote"]["retries"])
-    else:
-        retries = 0
-
-    if "retry_wait" in config["remote"]:
-        retry_wait = int(config["remote"]["retry_wait"])
-    else:
-        retry_wait = 0
+    retries, retry_wait = config_get_retries(config)
 
     for i in range(retries + 1):
         try:
@@ -207,10 +213,28 @@ def action_prune(config, dry_run, stats):
     if "keep_yearly" in config["retention"]:
         cmd += ["--keep-yearly", str(config["retention"]["keep_yearly"])]
 
-    proc = run("prune", config, args=cmd, capture_stderr=True)
-    for line in proc.stderr.splitlines(keepends=True):
-        if not line.startswith("Keeping archive:"):
-            print(line, end="", file=sys.stderr)
+    retries, retry_wait = config_get_retries(config)
+
+    for i in range(retries + 1):
+        try:
+            proc = run("prune", config, args=cmd, capture_stderr=True)
+            for line in proc.stderr.splitlines(keepends=True):
+                if not line.startswith("Keeping archive:"):
+                    print(line, end="", file=sys.stderr)
+            break
+        except subprocess.CalledProcessError as e:
+            if e.stderr:
+                print(e.stderr, file=sys.stderr, flush=True)
+            print("Backup prune failed with exit code {}".format(e.returncode), file=sys.stderr, flush=True)
+
+            if i == retries:
+                sys.exit(e.returncode)
+
+            if retry_wait == 0:
+                print("Retrying prune ...", file=sys.stderr, flush=True)
+            else:
+                print("Retrying prune after {} min ..".format(retry_wait), file=sys.stderr, flush=True)
+                time.sleep(retry_wait * 60)
 
 
 def main():
