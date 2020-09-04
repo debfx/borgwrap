@@ -17,6 +17,10 @@ remote:
   compression: lz4
   # limit upload rate (in kiByte/s)
   rate_limit: 1000
+  # retry create/prune X times
+  retries: 1
+  # wait X min between retries
+  retry_wait: 15
 retention:
   keep_last: 10
   keep_within: 24H
