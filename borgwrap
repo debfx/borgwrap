@@ -58,7 +58,7 @@ def run(action, config, archive=False, args=[], trailing_args=[], capture_stdout
     else:
         stderr = None
 
-    return subprocess.run(["borgbackup", action] + args + [repo] + trailing_args, check=True, env=env,
+    return subprocess.run(["borg", action] + args + [repo] + trailing_args, check=True, env=env,
                           stdout=stdout, stderr=stderr, universal_newlines=True)
 
 
@@ -152,7 +152,7 @@ def action_cmd(config, dry_run, raw_args):
         env["BORG_RSH"] = config["remote"]["rsh"]
     env["BORG_REPO"] = config["remote"]["repository"]
 
-    cmd = ["borgbackup"] + raw_args
+    cmd = ["borg"] + raw_args
 
     if dry_run:
         print("Not running command \"{}\" as dry run is enabled.".format(" ".join(cmd)))
