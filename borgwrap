@@ -245,7 +245,8 @@ def main():
     subparsers = parser.add_subparsers(dest="action")
 
     parser_create = subparsers.add_parser("create", help="Create a backup archive")
-    parser_create.add_argument("--no-prune", action="store_true", help="Don't run prune after creating a backup")
+    parser_create.add_argument("--prune", action="store_true", help="Run prune after creating a backup")
+    parser_create.add_argument("--no-prune", action="store_true", help="Don't run prune after creating a backup [deprecated, as this is the default]")
     parser_create.add_argument("--stats", action="store_true", help="Print statistics of the created archive")
 
     parser_list = subparsers.add_parser("list", help="List backup archives")
@@ -268,7 +269,7 @@ def main():
         hooks_before(config, dry_run=args.dry_run)
         action_create(config, dry_run=args.dry_run, stats=args.stats)
         hooks_after(config, dry_run=args.dry_run)
-        if not args.no_prune:
+        if args.prune:
             action_prune(config, dry_run=args.dry_run, stats=args.stats)
     elif args.action == "list":
         action_list(config)
