@@ -5,6 +5,7 @@ import datetime
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import yaml
 
@@ -37,6 +38,13 @@ def config_get_retries(config):
         retry_wait = 0
 
     return retries, retry_wait
+
+
+def write_exclude_file(excludes):
+    tmpfile = tempfile.NamedTemporaryFile("w", suffix="-borgwrap")
+    tmpfile.write("\n".join(excludes) + "\n")
+    tmpfile.flush()
+    return tmpfile
 
 
 def run(action, config, archive=False, args=[], trailing_args=[], capture_stdout=False, capture_stderr=False):
@@ -91,9 +99,9 @@ def action_create(config, dry_run, stats):
     if "noatime" in config["location"] and config_is_true(config["location"]["noatime"]):
         cmd.append("--noatime")
 
-    if "exclude" in config["location"]:
-        for exclude in config["location"]["exclude"]:
-            cmd += ["--exclude", exclude]
+    if "exclude" in config["location"] and len(config["location"]["exclude"]) > 0:
+        exclude_file = write_exclude_file(config["location"]["exclude"])
+        cmd += ["--exclude-from", exclude_file.name]
 
     if dry_run:
         cmd += ["--dry-run"]
