@@ -70,7 +70,7 @@ def run(action, config, archive=False, args=[], trailing_args=[], capture_stdout
                           stdout=stdout, stderr=stderr, universal_newlines=True)
 
 
-def action_create(config, dry_run, stats):
+def action_create(config, dry_run, stats, list_files):
     source = config["location"]["source"]
     if isinstance(source, str):
         source = [source]
@@ -108,6 +108,9 @@ def action_create(config, dry_run, stats):
 
     if stats:
         cmd += ["--stats"]
+
+    if list_files:
+        cmd += ["--list"]
 
     retries, retry_wait = config_get_retries(config)
 
@@ -256,6 +259,7 @@ def main():
     parser_create.add_argument("--prune", action="store_true", help="Run prune after creating a backup")
     parser_create.add_argument("--no-prune", action="store_true", help="Don't run prune after creating a backup [deprecated, as this is the default]")
     parser_create.add_argument("--stats", action="store_true", help="Print statistics of the created archive")
+    parser_create.add_argument("--list", action="store_true", help="Print a list of all files being processed by borg")
 
     parser_list = subparsers.add_parser("list", help="List backup archives")
 
@@ -275,7 +279,7 @@ def main():
 
     if args.action == "create":
         hooks_before(config, dry_run=args.dry_run)
-        action_create(config, dry_run=args.dry_run, stats=args.stats)
+        action_create(config, dry_run=args.dry_run, stats=args.stats, list_files=args.list)
         hooks_after(config, dry_run=args.dry_run)
         if args.prune:
             action_prune(config, dry_run=args.dry_run, stats=args.stats)
