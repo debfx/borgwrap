@@ -121,7 +121,8 @@ def action_create(config, dry_run, stats):
 
 
 def action_list(config):
-    run("list", config)
+    args = ["--prefix", config["remote"]["prefix"]]
+    run("list", config, args=args)
 
 
 def action_check_age(config, max_age, min_size):
