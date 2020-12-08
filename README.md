@@ -32,7 +32,7 @@ See also the [example config](borgbackup.yml)
 
 # Examples
 
-Create a backup and prune archives according to the config settings:
+Create a backup according to the config settings:
 
 ```
 borgwrap -c borgbackup.yaml create --stats
