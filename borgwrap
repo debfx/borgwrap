@@ -48,6 +48,14 @@ def write_exclude_file(excludes):
     return tmpfile
 
 
+def human_readable_size(num, suffix="B"):
+    for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei"]:
+        if num < 1024.0:
+            return f"{int(num)}{unit}{suffix}"
+        num /= 1024.0
+    return f"{int(num)}Zi{suffix}"
+
+
 def run(
     action,
     config,
@@ -154,9 +162,44 @@ def action_create(config, dry_run, stats, list_files):
                 time.sleep(retry_wait * 60)
 
 
-def action_list(config):
-    args = ["--prefix", config["remote"]["prefix"]]
-    run("list", config, args=args)
+def action_list(config, details):
+    if details:
+        args = ["--json", "--prefix", config["remote"]["prefix"]]
+        proc_result = run("info", config, args=args, capture_stdout=True)
+        archive_info = yaml.safe_load(proc_result.stdout)
+
+        archives = []
+        column_sizes = {}
+        columns = ["Name", "Orig", "Comp", "Dedup", "Files", "Duration"]
+
+        for archive in archive_info["archives"]:
+            archives.append(
+                {
+                    "Name": archive["name"],
+                    "Orig": human_readable_size(archive["stats"]["original_size"]),
+                    "Comp": human_readable_size(archive["stats"]["compressed_size"]),
+                    "Dedup": human_readable_size(archive["stats"]["deduplicated_size"]),
+                    "Files": str(archive["stats"]["nfiles"]),
+                    "Duration": f"{int(archive['duration'])}s",
+                }
+            )
+
+        for column in columns:
+            max_len = len(column)
+            for archive in archives:
+                max_len = max(max_len, len(archive[column]))
+            column_sizes[column] = max_len + 4
+
+            print(f"{column : <{column_sizes[column]}}", end="")
+
+        print()
+        for archive in archives:
+            for column in columns:
+                print(f"{archive[column] : <{column_sizes[column]}}", end="")
+            print()
+    else:
+        args = ["--prefix", config["remote"]["prefix"]]
+        run("list", config, args=args)
 
 
 def action_check_age(config, max_age, min_size):
@@ -313,6 +356,11 @@ def main():
     )
 
     parser_list = subparsers.add_parser("list", help="List backup archives")
+    parser_list.add_argument(
+        "--details",
+        action="store_true",
+        help="List details about each archive",
+    )
 
     parser_prune = subparsers.add_parser("prune", help="Prune archives according to the config settings")
     parser_prune.add_argument("--stats", action="store_true", help="Print statistics of the deleted archives")
@@ -341,7 +389,7 @@ def main():
         if args.prune:
             action_prune(config, dry_run=args.dry_run, stats=args.stats)
     elif args.action == "list":
-        action_list(config)
+        action_list(config, args.details)
     elif args.action == "prune":
         action_prune(config, dry_run=args.dry_run, stats=args.stats)
     elif args.action == "nagios-check-age":
