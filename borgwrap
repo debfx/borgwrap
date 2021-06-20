@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import time
+
 import yaml
 
 
@@ -47,7 +48,15 @@ def write_exclude_file(excludes):
     return tmpfile
 
 
-def run(action, config, archive=False, args=[], trailing_args=[], capture_stdout=False, capture_stderr=False):
+def run(
+    action,
+    config,
+    archive=False,
+    args=[],
+    trailing_args=[],
+    capture_stdout=False,
+    capture_stderr=False,
+):
     repo = config["remote"]["repository"]
     if archive:
         repo += "::{}-{{utcnow:%Y-%m-%dT%H:%M:%SZ}}".format(config["remote"]["prefix"])
@@ -66,8 +75,14 @@ def run(action, config, archive=False, args=[], trailing_args=[], capture_stdout
     else:
         stderr = None
 
-    return subprocess.run(["borg", action] + args + [repo] + trailing_args, check=True, env=env,
-                          stdout=stdout, stderr=stderr, universal_newlines=True)
+    return subprocess.run(
+        ["borg", action] + args + [repo] + trailing_args,
+        check=True,
+        env=env,
+        stdout=stdout,
+        stderr=stderr,
+        universal_newlines=True,
+    )
 
 
 def action_create(config, dry_run, stats, list_files):
@@ -119,7 +134,11 @@ def action_create(config, dry_run, stats, list_files):
             run("create", config, archive=True, args=cmd, trailing_args=source)
             break
         except subprocess.CalledProcessError as e:
-            print("Backup creation failed with exit code {}".format(e.returncode), file=sys.stderr, flush=True)
+            print(
+                "Backup creation failed with exit code {}".format(e.returncode),
+                file=sys.stderr,
+                flush=True,
+            )
 
             if i == retries:
                 sys.exit(e.returncode)
@@ -127,7 +146,11 @@ def action_create(config, dry_run, stats, list_files):
             if retry_wait == 0:
                 print("Retrying backup ...", file=sys.stderr, flush=True)
             else:
-                print("Retrying backup after {} min ..".format(retry_wait), file=sys.stderr, flush=True)
+                print(
+                    "Retrying backup after {} min ..".format(retry_wait),
+                    file=sys.stderr,
+                    flush=True,
+                )
                 time.sleep(retry_wait * 60)
 
 
@@ -138,7 +161,14 @@ def action_list(config):
 
 def action_check_age(config, max_age, min_size):
     try:
-        proc_result = run("info", config, archive=False, args=["--last", "1", "--json"], capture_stdout=True, capture_stderr=True)
+        proc_result = run(
+            "info",
+            config,
+            archive=False,
+            args=["--last", "1", "--json"],
+            capture_stdout=True,
+            capture_stderr=True,
+        )
     except subprocess.CalledProcessError as e:
         print("BORGBACKUP UNKNOWN - borgbackup command failed\n\n" + e.stderr)
         sys.exit(3)
@@ -167,7 +197,7 @@ def action_cmd(config, dry_run, raw_args):
     cmd = ["borg"] + raw_args
 
     if dry_run:
-        print("Not running command \"{}\" as dry run is enabled.".format(" ".join(cmd)))
+        print('Not running command "{}" as dry run is enabled.'.format(" ".join(cmd)))
     else:
         subprocess.run(cmd, check=True, env=env)
 
@@ -178,7 +208,7 @@ def hooks_before(config, dry_run):
 
     for hook in config["hooks"]["before"]:
         if dry_run:
-            print("Not running hook \"{}\" as dry run is enabled.".format(hook))
+            print('Not running hook "{}" as dry run is enabled.'.format(hook))
         else:
             subprocess.run(hook, shell=True, check=True)
 
@@ -189,13 +219,13 @@ def hooks_after(config, dry_run):
 
     for hook in config["hooks"]["after"]:
         if dry_run:
-            print("Not running hook \"{}\" as dry run is enabled.".format(hook))
+            print('Not running hook "{}" as dry run is enabled.'.format(hook))
         else:
             subprocess.run(hook, shell=True, check=True)
 
 
 def action_prune(config, dry_run, stats):
-    cmd =  ["--list"]
+    cmd = ["--list"]
     cmd += ["--prefix", config["remote"]["prefix"]]
 
     if dry_run:
@@ -237,7 +267,11 @@ def action_prune(config, dry_run, stats):
         except subprocess.CalledProcessError as e:
             if e.stderr:
                 print(e.stderr, file=sys.stderr, flush=True)
-            print("Backup prune failed with exit code {}".format(e.returncode), file=sys.stderr, flush=True)
+            print(
+                "Backup prune failed with exit code {}".format(e.returncode),
+                file=sys.stderr,
+                flush=True,
+            )
 
             if i == retries:
                 sys.exit(e.returncode)
@@ -245,32 +279,55 @@ def action_prune(config, dry_run, stats):
             if retry_wait == 0:
                 print("Retrying prune ...", file=sys.stderr, flush=True)
             else:
-                print("Retrying prune after {} min ..".format(retry_wait), file=sys.stderr, flush=True)
+                print(
+                    "Retrying prune after {} min ..".format(retry_wait),
+                    file=sys.stderr,
+                    flush=True,
+                )
                 time.sleep(retry_wait * 60)
 
 
 def main():
     parser = argparse.ArgumentParser(description="borgbackup wrapper")
     parser.add_argument("--config", "-c", required=True, help="Path to the config file")
-    parser.add_argument("--dry-run", "-n", action="store_true", help="Perform a trial run with no changes made")
+    parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Perform a trial run with no changes made",
+    )
     subparsers = parser.add_subparsers(dest="action")
 
     parser_create = subparsers.add_parser("create", help="Create a backup archive")
     parser_create.add_argument("--prune", action="store_true", help="Run prune after creating a backup")
-    parser_create.add_argument("--no-prune", action="store_true", help="Don't run prune after creating a backup [deprecated, as this is the default]")
+    parser_create.add_argument(
+        "--no-prune",
+        action="store_true",
+        help="Don't run prune after creating a backup [deprecated, as this is the default]",
+    )
     parser_create.add_argument("--stats", action="store_true", help="Print statistics of the created archive")
-    parser_create.add_argument("--list", action="store_true", help="Print a list of all files being processed by borg")
+    parser_create.add_argument(
+        "--list",
+        action="store_true",
+        help="Print a list of all files being processed by borg",
+    )
 
     parser_list = subparsers.add_parser("list", help="List backup archives")
 
     parser_prune = subparsers.add_parser("prune", help="Prune archives according to the config settings")
     parser_prune.add_argument("--stats", action="store_true", help="Print statistics of the deleted archives")
 
-    parser_check_age = subparsers.add_parser("nagios-check-age", help="Check last backup age, usable as a Icinga/Nagios check")
+    parser_check_age = subparsers.add_parser(
+        "nagios-check-age",
+        help="Check last backup age, usable as a Icinga/Nagios check",
+    )
     parser_check_age.add_argument("--max-age", type=int, required=True, help="Max age in hours")
     parser_check_age.add_argument("--min-size", type=int, help="Min backup size in MiB")
 
-    parser_cmd = subparsers.add_parser("cmd", help="Run a borgbackup command. Exports the remote archive as BORG_REPO so it can be referenced as \"::\".")
+    parser_cmd = subparsers.add_parser(
+        "cmd",
+        help='Run a borgbackup command. Exports the remote archive as BORG_REPO so it can be referenced as "::".',
+    )
     parser_cmd.add_argument("raw", nargs="+")
 
     args = parser.parse_args()
@@ -292,7 +349,7 @@ def main():
             min_size = args.min_size
         else:
             min_size = None
-        action_check_age(config, max_age=args.max_age*3600, min_size=min_size)
+        action_check_age(config, max_age=args.max_age * 3600, min_size=min_size)
     elif args.action == "cmd":
         action_cmd(config, dry_run=args.dry_run, raw_args=args.raw)
 
