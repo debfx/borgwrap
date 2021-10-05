@@ -60,12 +60,17 @@ def run(
     action,
     config,
     archive=False,
-    args=[],
-    trailing_args=[],
+    args=None,
+    trailing_args=None,
     capture_stdout=False,
     capture_stderr=False,
     timeout=None,
 ):
+    if args is None:
+        args = []
+    if trailing_args is None:
+        args = trailing_args
+
     repo = config["remote"]["repository"]
     if archive:
         repo += "::{}-{{utcnow:%Y-%m-%dT%H:%M:%SZ}}".format(config["remote"]["prefix"])
