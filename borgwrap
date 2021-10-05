@@ -12,8 +12,8 @@ import yaml
 
 
 def parse_config(filename):
-    with open(filename) as f:
-        return yaml.safe_load(f)
+    with open(filename) as file_config:
+        return yaml.safe_load(file_config)
 
 
 def config_is_true(value):
@@ -143,15 +143,15 @@ def action_create(config, dry_run, stats, list_files):
         try:
             run("create", config, archive=True, args=cmd, trailing_args=source)
             break
-        except subprocess.CalledProcessError as e:
+        except subprocess.CalledProcessError as exc:
             print(
-                "Backup creation failed with exit code {}".format(e.returncode),
+                "Backup creation failed with exit code {}".format(exc.returncode),
                 file=sys.stderr,
                 flush=True,
             )
 
             if i == retries:
-                sys.exit(e.returncode)
+                sys.exit(exc.returncode)
 
             if retry_wait == 0:
                 print("Retrying backup ...", file=sys.stderr, flush=True)
@@ -215,11 +215,11 @@ def action_check_age(config, max_age, min_size):
             capture_stderr=True,
             timeout=150,
         )
-    except subprocess.CalledProcessError as e:
-        print("BORGBACKUP UNKNOWN - borgbackup command failed\n\n" + e.stderr)
+    except subprocess.CalledProcessError as exc:
+        print("BORGBACKUP UNKNOWN - borgbackup command failed\n\n" + exc.stderr)
         sys.exit(3)
-    except subprocess.TimeoutExpired as e:
-        print("BORGBACKUP UNKNOWN - borgbackup command timed out\n\n" + e.stderr)
+    except subprocess.TimeoutExpired as exc:
+        print("BORGBACKUP UNKNOWN - borgbackup command timed out\n\n" + exc.stderr)
         sys.exit(3)
 
     last_backup = yaml.safe_load(proc_result.stdout)
@@ -314,17 +314,17 @@ def action_prune(config, dry_run, stats):
                 if not line.startswith("Keeping archive:"):
                     print(line, end="", file=sys.stderr)
             break
-        except subprocess.CalledProcessError as e:
-            if e.stderr:
-                print(e.stderr, file=sys.stderr, flush=True)
+        except subprocess.CalledProcessError as exc:
+            if exc.stderr:
+                print(exc.stderr, file=sys.stderr, flush=True)
             print(
-                "Backup prune failed with exit code {}".format(e.returncode),
+                "Backup prune failed with exit code {}".format(exc.returncode),
                 file=sys.stderr,
                 flush=True,
             )
 
             if i == retries:
-                sys.exit(e.returncode)
+                sys.exit(exc.returncode)
 
             if retry_wait == 0:
                 print("Retrying prune ...", file=sys.stderr, flush=True)
