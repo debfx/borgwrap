@@ -7,16 +7,17 @@ import subprocess
 import sys
 import tempfile
 import time
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
 
-def parse_config(filename):
+def parse_config(filename: str) -> Dict[str, Any]:
     with open(filename) as file_config:
-        return yaml.safe_load(file_config)
+        return yaml.safe_load(file_config)  # type: ignore
 
 
-def config_is_true(value):
+def config_is_true(value: Any) -> bool:
     if isinstance(value, bool):
         return value
     elif isinstance(value, str) and value.lower() in ("yes", "true"):
@@ -27,7 +28,7 @@ def config_is_true(value):
         return False
 
 
-def config_get_retries(config):
+def config_get_retries(config: Dict[str, Any]) -> Tuple[int, int]:
     if "retries" in config["remote"]:
         retries = int(config["remote"]["retries"])
     else:
@@ -41,14 +42,14 @@ def config_get_retries(config):
     return retries, retry_wait
 
 
-def write_exclude_file(excludes):
+def write_exclude_file(excludes: List[str]) -> Any:
     tmpfile = tempfile.NamedTemporaryFile("w", suffix="-borgwrap")
     tmpfile.write("\n".join(excludes) + "\n")
     tmpfile.flush()
     return tmpfile
 
 
-def human_readable_size(num, suffix="B"):
+def human_readable_size(num: float, suffix: str = "B") -> str:
     for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei"]:
         if num < 1024.0:
             return f"{int(num)}{unit}{suffix}"
@@ -57,19 +58,17 @@ def human_readable_size(num, suffix="B"):
 
 
 def run(
-    action,
-    config,
-    archive=False,
-    args=None,
-    trailing_args=None,
-    capture_stdout=False,
-    capture_stderr=False,
-    timeout=None,
-):
-    if args is None:
-        args = []
-    if trailing_args is None:
-        args = trailing_args
+    action: str,
+    config: Dict[str, Any],
+    archive: bool = False,
+    args: Optional[List[str]] = None,
+    trailing_args: Optional[List[str]] = None,
+    capture_stdout: bool = False,
+    capture_stderr: bool = False,
+    timeout: Optional[int] = None,
+) -> subprocess.CompletedProcess:
+    args_list = args if args is not None else []
+    trailing_args_list = trailing_args if trailing_args is not None else []
 
     repo = config["remote"]["repository"]
     if archive:
@@ -80,17 +79,17 @@ def run(
         env["BORG_RSH"] = config["remote"]["rsh"]
 
     if capture_stdout:
-        stdout = subprocess.PIPE
+        stdout: Optional[int] = subprocess.PIPE
     else:
         stdout = None
 
     if capture_stderr:
-        stderr = subprocess.PIPE
+        stderr: Optional[int] = subprocess.PIPE
     else:
         stderr = None
 
     return subprocess.run(
-        ["borg", action] + args + [repo] + trailing_args,
+        ["borg", action] + args_list + [repo] + trailing_args_list,
         check=True,
         env=env,
         stdout=stdout,
@@ -100,7 +99,7 @@ def run(
     )
 
 
-def action_create(config, dry_run, stats, list_files):
+def action_create(config: Dict[str, Any], dry_run: bool, stats: bool, list_files: bool) -> None:
     source = config["location"]["source"]
     if isinstance(source, str):
         source = [source]
@@ -169,7 +168,7 @@ def action_create(config, dry_run, stats, list_files):
                 time.sleep(retry_wait * 60)
 
 
-def action_list(config, details):
+def action_list(config: Dict[str, Any], details: bool) -> None:
     if details:
         args = ["--json", "--prefix", config["remote"]["prefix"]]
         proc_result = run("info", config, args=args, capture_stdout=True)
@@ -209,7 +208,7 @@ def action_list(config, details):
         run("list", config, args=args)
 
 
-def action_check_age(config, max_age, min_size):
+def action_check_age(config: Dict[str, Any], max_age: int, min_size: int) -> None:
     try:
         proc_result = run(
             "info",
@@ -243,7 +242,7 @@ def action_check_age(config, max_age, min_size):
     sys.exit(0)
 
 
-def action_cmd(config, dry_run, raw_args):
+def action_cmd(config: Dict[str, Any], dry_run: bool, raw_args: List[str]) -> None:
     env = dict(os.environ)
     if "rsh" in config["remote"]:
         env["BORG_RSH"] = config["remote"]["rsh"]
@@ -257,7 +256,7 @@ def action_cmd(config, dry_run, raw_args):
         subprocess.run(cmd, check=True, env=env)
 
 
-def hooks_before(config, dry_run):
+def hooks_before(config: Dict[str, Any], dry_run: bool) -> None:
     if "hooks" not in config or "before" not in config["hooks"]:
         return
 
@@ -268,7 +267,7 @@ def hooks_before(config, dry_run):
             subprocess.run(hook, shell=True, check=True)
 
 
-def hooks_after(config, dry_run):
+def hooks_after(config: Dict[str, Any], dry_run: bool) -> None:
     if "hooks" not in config or "after" not in config["hooks"]:
         return
 
@@ -279,7 +278,7 @@ def hooks_after(config, dry_run):
             subprocess.run(hook, shell=True, check=True)
 
 
-def action_prune(config, dry_run, stats):
+def action_prune(config: Dict[str, Any], dry_run: bool, stats: bool) -> None:
     cmd = ["--list"]
     cmd += ["--prefix", config["remote"]["prefix"]]
 
@@ -342,7 +341,7 @@ def action_prune(config, dry_run, stats):
                 time.sleep(retry_wait * 60)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="borgbackup wrapper")
     parser.add_argument("--config", "-c", required=True, help="Path to the config file")
     parser.add_argument(
