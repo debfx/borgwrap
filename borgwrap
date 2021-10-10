@@ -208,7 +208,7 @@ def action_list(config: Dict[str, Any], details: bool) -> None:
         run("list", config, args=args)
 
 
-def action_check_age(config: Dict[str, Any], max_age: int, min_size: int) -> None:
+def action_check_age(config: Dict[str, Any], max_age: int, min_size: Optional[int]) -> None:
     try:
         proc_result = run(
             "info",
@@ -234,7 +234,7 @@ def action_check_age(config: Dict[str, Any], max_age: int, min_size: int) -> Non
         sys.exit(1)
 
     size = int(last_backup["archives"][0]["stats"]["original_size"] / 1024 / 1024)
-    if min_size and size < min_size:
+    if min_size is not None and size < min_size:
         print("BORGBACKUP WARNING - last backup too small\n\n{}M < {}M".format(size, min_size))
         sys.exit(1)
 
