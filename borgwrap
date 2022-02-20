@@ -220,10 +220,10 @@ def action_check_age(config: Dict[str, Any], max_age: int, min_size: Optional[in
             timeout=150,
         )
     except subprocess.CalledProcessError as exc:
-        print("BORGBACKUP UNKNOWN - borgbackup command failed\n\n" + exc.stderr)
+        print("BORGBACKUP UNKNOWN - borgbackup command failed\n\n{}".format(exc.stderr or ""))
         sys.exit(3)
     except subprocess.TimeoutExpired as exc:
-        print("BORGBACKUP UNKNOWN - borgbackup command timed out\n\n" + exc.stderr)
+        print("BORGBACKUP UNKNOWN - borgbackup command timed out\n\n{}".format(exc.stderr or ""))
         sys.exit(3)
 
     last_backup = yaml.safe_load(proc_result.stdout)
