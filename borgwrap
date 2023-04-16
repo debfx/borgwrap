@@ -3,6 +3,7 @@
 import argparse
 import datetime
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,7 @@ import yaml
 class BorgWrap:
     def __init__(self, config_path: str) -> None:
         self.config = self.parse_config(config_path)
+        self.borg_version = self.determine_borg_version()
 
     @staticmethod
     def parse_config(filename: str) -> Dict[str, Any]:
@@ -46,6 +48,17 @@ class BorgWrap:
         return retries, retry_wait
 
     @staticmethod
+    def determine_borg_version() -> Tuple[int, int, int]:
+        proc_result = subprocess.run(
+            ["borg", "--version"], check=True, universal_newlines=True, stdout=subprocess.PIPE
+        )
+        match = re.search(r"(\d+)\.(\d+)\.(\d+)", proc_result.stdout)
+        if not match:
+            raise Exception(f"unable to detect borg version: {proc_result.stdout}")
+
+        return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+
+    @staticmethod
     def write_exclude_file(excludes: List[str]) -> Any:
         tmpfile = tempfile.NamedTemporaryFile("w", suffix="-borgwrap")
         tmpfile.write("\n".join(excludes) + "\n")
@@ -59,6 +72,12 @@ class BorgWrap:
                 return f"{int(num)}{unit}{suffix}"
             num /= 1024.0
         return f"{int(num)}Zi{suffix}"
+
+    def archive_prefix_args(self) -> List[str]:
+        if self.borg_version >= (1, 2, 0):
+            return ["--glob-archives", self.config["remote"]["prefix"] + "*"]
+        else:
+            return ["--prefix", self.config["remote"]["prefix"]]
 
     def run(
         self,
@@ -112,7 +131,12 @@ class BorgWrap:
             cmd += ["--compression", self.config["remote"]["compression"]]
 
         if "rate_limit" in self.config["remote"]:
-            cmd += ["--remote-ratelimit", str(self.config["remote"]["rate_limit"])]
+            if self.borg_version >= (1, 2, 0):
+                cmd.append("--upload-ratelimit")
+            else:
+                cmd.append("--remote-ratelimit")
+
+            cmd.append(str(self.config["remote"]["rate_limit"]))
 
         if "one_file_system" in self.config["location"] and self.config_is_true(
             self.config["location"]["one_file_system"]
@@ -133,7 +157,12 @@ class BorgWrap:
             for exclude in self.config["location"]["exclude_if_present"]:
                 cmd += ["--exclude-if-present", exclude]
 
-        if "noatime" in self.config["location"] and self.config_is_true(self.config["location"]["noatime"]):
+        # noatime is default for borg >= 1.2
+        if (
+            self.borg_version < (1, 2, 0)
+            and "noatime" in self.config["location"]
+            and self.config_is_true(self.config["location"]["noatime"])
+        ):
             cmd.append("--noatime")
 
         if "exclude" in self.config["location"] and len(self.config["location"]["exclude"]) > 0:
@@ -176,8 +205,10 @@ class BorgWrap:
                     time.sleep(retry_wait * 60)
 
     def action_list(self, details: bool) -> None:
+        args = self.archive_prefix_args()
+
         if details:
-            args = ["--json", "--prefix", self.config["remote"]["prefix"]]
+            args += ["--json"]
             proc_result = self.run("info", args=args, capture_stdout=True)
             archive_info = yaml.safe_load(proc_result.stdout)
 
@@ -211,7 +242,6 @@ class BorgWrap:
                     print(f"{archive[column] : <{column_sizes[column]}}", end="")
                 print()
         else:
-            args = ["--prefix", self.config["remote"]["prefix"]]
             self.run("list", args=args)
 
     def action_check_age(self, max_age: int, min_size: Optional[int]) -> None:
@@ -285,7 +315,7 @@ class BorgWrap:
 
     def action_prune(self, dry_run: bool, stats: bool) -> None:
         cmd = ["--list"]
-        cmd += ["--prefix", self.config["remote"]["prefix"]]
+        cmd += self.archive_prefix_args()
 
         if dry_run:
             cmd += ["--dry-run"]
@@ -344,6 +374,9 @@ class BorgWrap:
                         flush=True,
                     )
                     time.sleep(retry_wait * 60)
+
+        if self.borg_version >= (1, 2, 0) and not dry_run:
+            self.run("compact")
 
 
 def main() -> None:
