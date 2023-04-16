@@ -12,333 +12,334 @@ from typing import Any, Dict, List, Optional, Tuple
 import yaml
 
 
-def parse_config(filename: str) -> Dict[str, Any]:
-    with open(filename) as file_config:
-        return yaml.safe_load(file_config)  # type: ignore
+class BorgWrap:
+    def __init__(self, config_path: str) -> None:
+        self.config = self.parse_config(config_path)
 
+    @staticmethod
+    def parse_config(filename: str) -> Dict[str, Any]:
+        with open(filename) as file_config:
+            return yaml.safe_load(file_config)  # type: ignore
 
-def config_is_true(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    elif isinstance(value, str) and value.lower() in ("yes", "true"):
-        return True
-    elif value == 1:
-        return True
-    else:
-        return False
+    @staticmethod
+    def config_is_true(value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        elif isinstance(value, str) and value.lower() in ("yes", "true"):
+            return True
+        elif value == 1:
+            return True
+        else:
+            return False
 
+    def config_get_retries(self) -> Tuple[int, int]:
+        if "retries" in self.config["remote"]:
+            retries = int(self.config["remote"]["retries"])
+        else:
+            retries = 0
 
-def config_get_retries(config: Dict[str, Any]) -> Tuple[int, int]:
-    if "retries" in config["remote"]:
-        retries = int(config["remote"]["retries"])
-    else:
-        retries = 0
+        if "retry_wait" in self.config["remote"]:
+            retry_wait = int(self.config["remote"]["retry_wait"])
+        else:
+            retry_wait = 0
 
-    if "retry_wait" in config["remote"]:
-        retry_wait = int(config["remote"]["retry_wait"])
-    else:
-        retry_wait = 0
+        return retries, retry_wait
 
-    return retries, retry_wait
+    @staticmethod
+    def write_exclude_file(excludes: List[str]) -> Any:
+        tmpfile = tempfile.NamedTemporaryFile("w", suffix="-borgwrap")
+        tmpfile.write("\n".join(excludes) + "\n")
+        tmpfile.flush()
+        return tmpfile
 
+    @staticmethod
+    def human_readable_size(num: float, suffix: str = "B") -> str:
+        for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei"]:
+            if num < 1024.0:
+                return f"{int(num)}{unit}{suffix}"
+            num /= 1024.0
+        return f"{int(num)}Zi{suffix}"
 
-def write_exclude_file(excludes: List[str]) -> Any:
-    tmpfile = tempfile.NamedTemporaryFile("w", suffix="-borgwrap")
-    tmpfile.write("\n".join(excludes) + "\n")
-    tmpfile.flush()
-    return tmpfile
+    def run(
+        self,
+        action: str,
+        archive: bool = False,
+        args: Optional[List[str]] = None,
+        trailing_args: Optional[List[str]] = None,
+        capture_stdout: bool = False,
+        capture_stderr: bool = False,
+        timeout: Optional[int] = None,
+    ) -> subprocess.CompletedProcess:
+        args_list = args if args is not None else []
+        trailing_args_list = trailing_args if trailing_args is not None else []
 
+        repo = self.config["remote"]["repository"]
+        if archive:
+            repo += "::{}-{{utcnow:%Y-%m-%dT%H:%M:%SZ}}".format(self.config["remote"]["prefix"])
 
-def human_readable_size(num: float, suffix: str = "B") -> str:
-    for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei"]:
-        if num < 1024.0:
-            return f"{int(num)}{unit}{suffix}"
-        num /= 1024.0
-    return f"{int(num)}Zi{suffix}"
+        env = dict(os.environ)
+        if "rsh" in self.config["remote"]:
+            env["BORG_RSH"] = self.config["remote"]["rsh"]
 
+        if capture_stdout:
+            stdout: Optional[int] = subprocess.PIPE
+        else:
+            stdout = None
 
-def run(
-    action: str,
-    config: Dict[str, Any],
-    archive: bool = False,
-    args: Optional[List[str]] = None,
-    trailing_args: Optional[List[str]] = None,
-    capture_stdout: bool = False,
-    capture_stderr: bool = False,
-    timeout: Optional[int] = None,
-) -> subprocess.CompletedProcess:
-    args_list = args if args is not None else []
-    trailing_args_list = trailing_args if trailing_args is not None else []
+        if capture_stderr:
+            stderr: Optional[int] = subprocess.PIPE
+        else:
+            stderr = None
 
-    repo = config["remote"]["repository"]
-    if archive:
-        repo += "::{}-{{utcnow:%Y-%m-%dT%H:%M:%SZ}}".format(config["remote"]["prefix"])
-
-    env = dict(os.environ)
-    if "rsh" in config["remote"]:
-        env["BORG_RSH"] = config["remote"]["rsh"]
-
-    if capture_stdout:
-        stdout: Optional[int] = subprocess.PIPE
-    else:
-        stdout = None
-
-    if capture_stderr:
-        stderr: Optional[int] = subprocess.PIPE
-    else:
-        stderr = None
-
-    return subprocess.run(
-        ["borg", action] + args_list + [repo] + trailing_args_list,
-        check=True,
-        env=env,
-        stdout=stdout,
-        stderr=stderr,
-        universal_newlines=True,
-        timeout=timeout,
-    )
-
-
-def action_create(config: Dict[str, Any], dry_run: bool, stats: bool, list_files: bool) -> None:
-    source = config["location"]["source"]
-    if isinstance(source, str):
-        source = [source]
-
-    cmd = []
-
-    if "compression" in config["remote"]:
-        cmd += ["--compression", config["remote"]["compression"]]
-
-    if "rate_limit" in config["remote"]:
-        cmd += ["--remote-ratelimit", str(config["remote"]["rate_limit"])]
-
-    if "one_file_system" in config["location"] and config_is_true(config["location"]["one_file_system"]):
-        cmd.append("--one-file-system")
-
-    if "exclude_caches" in config["location"] and config_is_true(config["location"]["exclude_caches"]):
-        cmd.append("--exclude-caches")
-
-    if "keep_exclude_tags" in config["location"] and config_is_true(config["location"]["keep_exclude_tags"]):
-        cmd.append("--keep-exclude-tags")
-
-    if "exclude_if_present" in config["location"]:
-        for exclude in config["location"]["exclude_if_present"]:
-            cmd += ["--exclude-if-present", exclude]
-
-    if "noatime" in config["location"] and config_is_true(config["location"]["noatime"]):
-        cmd.append("--noatime")
-
-    if "exclude" in config["location"] and len(config["location"]["exclude"]) > 0:
-        exclude_file = write_exclude_file(config["location"]["exclude"])
-        cmd += ["--exclude-from", exclude_file.name]
-
-    if dry_run:
-        cmd += ["--dry-run"]
-
-    if stats:
-        cmd += ["--stats"]
-
-    if list_files:
-        cmd += ["--list"]
-
-    retries, retry_wait = config_get_retries(config)
-
-    for i in range(retries + 1):
-        try:
-            run("create", config, archive=True, args=cmd, trailing_args=source)
-            break
-        except subprocess.CalledProcessError as exc:
-            print(
-                "Backup creation failed with exit code {}".format(exc.returncode),
-                file=sys.stderr,
-                flush=True,
-            )
-
-            if i == retries:
-                sys.exit(exc.returncode)
-
-            if retry_wait == 0:
-                print("Retrying backup ...", file=sys.stderr, flush=True)
-            else:
-                print(
-                    "Retrying backup after {} min ..".format(retry_wait),
-                    file=sys.stderr,
-                    flush=True,
-                )
-                time.sleep(retry_wait * 60)
-
-
-def action_list(config: Dict[str, Any], details: bool) -> None:
-    if details:
-        args = ["--json", "--prefix", config["remote"]["prefix"]]
-        proc_result = run("info", config, args=args, capture_stdout=True)
-        archive_info = yaml.safe_load(proc_result.stdout)
-
-        archives = []
-        column_sizes = {}
-        columns = ["Name", "Orig", "Comp", "Dedup", "Files", "Duration"]
-
-        for archive in archive_info["archives"]:
-            archives.append(
-                {
-                    "Name": archive["name"],
-                    "Orig": human_readable_size(archive["stats"]["original_size"]),
-                    "Comp": human_readable_size(archive["stats"]["compressed_size"]),
-                    "Dedup": human_readable_size(archive["stats"]["deduplicated_size"]),
-                    "Files": str(archive["stats"]["nfiles"]),
-                    "Duration": f"{int(archive['duration'])}s",
-                }
-            )
-
-        for column in columns:
-            max_len = len(column)
-            for archive in archives:
-                max_len = max(max_len, len(archive[column]))
-            column_sizes[column] = max_len + 4
-
-            print(f"{column : <{column_sizes[column]}}", end="")
-
-        print()
-        for archive in archives:
-            for column in columns:
-                print(f"{archive[column] : <{column_sizes[column]}}", end="")
-            print()
-    else:
-        args = ["--prefix", config["remote"]["prefix"]]
-        run("list", config, args=args)
-
-
-def action_check_age(config: Dict[str, Any], max_age: int, min_size: Optional[int]) -> None:
-    try:
-        proc_result = run(
-            "info",
-            config,
-            archive=False,
-            args=["--last", "1", "--json"],
-            capture_stdout=True,
-            capture_stderr=True,
-            timeout=150,
+        return subprocess.run(
+            ["borg", action] + args_list + [repo] + trailing_args_list,
+            check=True,
+            env=env,
+            stdout=stdout,
+            stderr=stderr,
+            universal_newlines=True,
+            timeout=timeout,
         )
-    except subprocess.CalledProcessError as exc:
-        print("BORGBACKUP UNKNOWN - borgbackup command failed\n\n{}".format(exc.stderr or ""))
-        sys.exit(3)
-    except subprocess.TimeoutExpired as exc:
-        print("BORGBACKUP UNKNOWN - borgbackup command timed out\n\n{}".format(exc.stderr or ""))
-        sys.exit(3)
 
-    last_backup = yaml.safe_load(proc_result.stdout)
+    def action_create(self, dry_run: bool, stats: bool, list_files: bool) -> None:
+        source = self.config["location"]["source"]
+        if isinstance(source, str):
+            source = [source]
 
-    backup_start = datetime.datetime.strptime(last_backup["archives"][0]["start"], "%Y-%m-%dT%H:%M:%S.%f")
-    if (datetime.datetime.now() - backup_start).total_seconds() > max_age:
-        print("BORGBACKUP WARNING - last backup too old: {:%Y-%m-%dT%H:%M:%S}".format(backup_start))
-        sys.exit(1)
+        cmd = []
 
-    size = int(last_backup["archives"][0]["stats"]["original_size"] / 1024 / 1024)
-    if min_size is not None and size < min_size:
-        print("BORGBACKUP WARNING - last backup too small\n\n{}M < {}M".format(size, min_size))
-        sys.exit(1)
+        if "compression" in self.config["remote"]:
+            cmd += ["--compression", self.config["remote"]["compression"]]
 
-    print("BORGBACKUP OK - last backup on: {:%Y-%m-%dT%H:%M:%S}, size: {}M".format(backup_start, size))
-    sys.exit(0)
+        if "rate_limit" in self.config["remote"]:
+            cmd += ["--remote-ratelimit", str(self.config["remote"]["rate_limit"])]
 
+        if "one_file_system" in self.config["location"] and self.config_is_true(
+            self.config["location"]["one_file_system"]
+        ):
+            cmd.append("--one-file-system")
 
-def action_cmd(config: Dict[str, Any], dry_run: bool, raw_args: List[str]) -> None:
-    env = dict(os.environ)
-    if "rsh" in config["remote"]:
-        env["BORG_RSH"] = config["remote"]["rsh"]
-    env["BORG_REPO"] = config["remote"]["repository"]
+        if "exclude_caches" in self.config["location"] and self.config_is_true(
+            self.config["location"]["exclude_caches"]
+        ):
+            cmd.append("--exclude-caches")
 
-    cmd = ["borg"] + raw_args
+        if "keep_exclude_tags" in self.config["location"] and self.config_is_true(
+            self.config["location"]["keep_exclude_tags"]
+        ):
+            cmd.append("--keep-exclude-tags")
 
-    if dry_run:
-        print('Not running command "{}" as dry run is enabled.'.format(" ".join(cmd)))
-    else:
-        subprocess.run(cmd, check=True, env=env)
+        if "exclude_if_present" in self.config["location"]:
+            for exclude in self.config["location"]["exclude_if_present"]:
+                cmd += ["--exclude-if-present", exclude]
 
+        if "noatime" in self.config["location"] and self.config_is_true(self.config["location"]["noatime"]):
+            cmd.append("--noatime")
 
-def hooks_before(config: Dict[str, Any], dry_run: bool) -> None:
-    if "hooks" not in config or "before" not in config["hooks"]:
-        return
+        if "exclude" in self.config["location"] and len(self.config["location"]["exclude"]) > 0:
+            exclude_file = self.write_exclude_file(self.config["location"]["exclude"])
+            cmd += ["--exclude-from", exclude_file.name]
 
-    for hook in config["hooks"]["before"]:
         if dry_run:
-            print('Not running hook "{}" as dry run is enabled.'.format(hook))
-        else:
-            subprocess.run(hook, shell=True, check=True)
+            cmd += ["--dry-run"]
 
+        if stats:
+            cmd += ["--stats"]
 
-def hooks_after(config: Dict[str, Any], dry_run: bool) -> None:
-    if "hooks" not in config or "after" not in config["hooks"]:
-        return
+        if list_files:
+            cmd += ["--list"]
 
-    for hook in config["hooks"]["after"]:
-        if dry_run:
-            print('Not running hook "{}" as dry run is enabled.'.format(hook))
-        else:
-            subprocess.run(hook, shell=True, check=True)
+        retries, retry_wait = self.config_get_retries()
 
-
-def action_prune(config: Dict[str, Any], dry_run: bool, stats: bool) -> None:
-    cmd = ["--list"]
-    cmd += ["--prefix", config["remote"]["prefix"]]
-
-    if dry_run:
-        cmd += ["--dry-run"]
-
-    if stats:
-        cmd += ["--stats"]
-
-    if "keep_last" in config["retention"]:
-        cmd += ["--keep-last", str(config["retention"]["keep_last"])]
-
-    if "keep_within" in config["retention"]:
-        cmd += ["--keep-within", str(config["retention"]["keep_within"])]
-
-    if "keep_hourly" in config["retention"]:
-        cmd += ["--keep-hourly", str(config["retention"]["keep_hourly"])]
-
-    if "keep_daily" in config["retention"]:
-        cmd += ["--keep-daily", str(config["retention"]["keep_daily"])]
-
-    if "keep_weekly" in config["retention"]:
-        cmd += ["--keep-weekly", str(config["retention"]["keep_weekly"])]
-
-    if "keep_monthly" in config["retention"]:
-        cmd += ["--keep-monthly", str(config["retention"]["keep_monthly"])]
-
-    if "keep_yearly" in config["retention"]:
-        cmd += ["--keep-yearly", str(config["retention"]["keep_yearly"])]
-
-    retries, retry_wait = config_get_retries(config)
-
-    for i in range(retries + 1):
-        try:
-            proc = run("prune", config, args=cmd, capture_stderr=True)
-            for line in proc.stderr.splitlines(keepends=True):
-                if not line.startswith("Keeping archive:"):
-                    print(line, end="", file=sys.stderr)
-            break
-        except subprocess.CalledProcessError as exc:
-            if exc.stderr:
-                print(exc.stderr, file=sys.stderr, flush=True)
-            print(
-                "Backup prune failed with exit code {}".format(exc.returncode),
-                file=sys.stderr,
-                flush=True,
-            )
-
-            if i == retries:
-                sys.exit(exc.returncode)
-
-            if retry_wait == 0:
-                print("Retrying prune ...", file=sys.stderr, flush=True)
-            else:
+        for i in range(retries + 1):
+            try:
+                self.run("create", archive=True, args=cmd, trailing_args=source)
+                break
+            except subprocess.CalledProcessError as exc:
                 print(
-                    "Retrying prune after {} min ..".format(retry_wait),
+                    "Backup creation failed with exit code {}".format(exc.returncode),
                     file=sys.stderr,
                     flush=True,
                 )
-                time.sleep(retry_wait * 60)
+
+                if i == retries:
+                    sys.exit(exc.returncode)
+
+                if retry_wait == 0:
+                    print("Retrying backup ...", file=sys.stderr, flush=True)
+                else:
+                    print(
+                        "Retrying backup after {} min ..".format(retry_wait),
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    time.sleep(retry_wait * 60)
+
+    def action_list(self, details: bool) -> None:
+        if details:
+            args = ["--json", "--prefix", self.config["remote"]["prefix"]]
+            proc_result = self.run("info", args=args, capture_stdout=True)
+            archive_info = yaml.safe_load(proc_result.stdout)
+
+            archives = []
+            column_sizes = {}
+            columns = ["Name", "Orig", "Comp", "Dedup", "Files", "Duration"]
+
+            for archive in archive_info["archives"]:
+                archives.append(
+                    {
+                        "Name": archive["name"],
+                        "Orig": self.human_readable_size(archive["stats"]["original_size"]),
+                        "Comp": self.human_readable_size(archive["stats"]["compressed_size"]),
+                        "Dedup": self.human_readable_size(archive["stats"]["deduplicated_size"]),
+                        "Files": str(archive["stats"]["nfiles"]),
+                        "Duration": f"{int(archive['duration'])}s",
+                    }
+                )
+
+            for column in columns:
+                max_len = len(column)
+                for archive in archives:
+                    max_len = max(max_len, len(archive[column]))
+                column_sizes[column] = max_len + 4
+
+                print(f"{column : <{column_sizes[column]}}", end="")
+
+            print()
+            for archive in archives:
+                for column in columns:
+                    print(f"{archive[column] : <{column_sizes[column]}}", end="")
+                print()
+        else:
+            args = ["--prefix", self.config["remote"]["prefix"]]
+            self.run("list", args=args)
+
+    def action_check_age(self, max_age: int, min_size: Optional[int]) -> None:
+        try:
+            proc_result = self.run(
+                "info",
+                archive=False,
+                args=["--last", "1", "--json"],
+                capture_stdout=True,
+                capture_stderr=True,
+                timeout=150,
+            )
+        except subprocess.CalledProcessError as exc:
+            print("BORGBACKUP UNKNOWN - borgbackup command failed\n\n{}".format(exc.stderr or ""))
+            sys.exit(3)
+        except subprocess.TimeoutExpired as exc:
+            print("BORGBACKUP UNKNOWN - borgbackup command timed out\n\n{}".format(exc.stderr or ""))
+            sys.exit(3)
+
+        last_backup = yaml.safe_load(proc_result.stdout)
+
+        backup_start = datetime.datetime.strptime(last_backup["archives"][0]["start"], "%Y-%m-%dT%H:%M:%S.%f")
+        if (datetime.datetime.now() - backup_start).total_seconds() > max_age:
+            print("BORGBACKUP WARNING - last backup too old: {:%Y-%m-%dT%H:%M:%S}".format(backup_start))
+            sys.exit(1)
+
+        size = int(last_backup["archives"][0]["stats"]["original_size"] / 1024 / 1024)
+        if min_size is not None and size < min_size:
+            print("BORGBACKUP WARNING - last backup too small\n\n{}M < {}M".format(size, min_size))
+            sys.exit(1)
+
+        print("BORGBACKUP OK - last backup on: {:%Y-%m-%dT%H:%M:%S}, size: {}M".format(backup_start, size))
+        sys.exit(0)
+
+    def action_cmd(self, dry_run: bool, raw_args: List[str]) -> None:
+        env = dict(os.environ)
+        if "rsh" in self.config["remote"]:
+            env["BORG_RSH"] = self.config["remote"]["rsh"]
+        env["BORG_REPO"] = self.config["remote"]["repository"]
+
+        cmd = ["borg"] + raw_args
+
+        if dry_run:
+            print('Not running command "{}" as dry run is enabled.'.format(" ".join(cmd)))
+        else:
+            subprocess.run(cmd, check=True, env=env)
+
+    def hooks_before(self, dry_run: bool) -> None:
+        if "hooks" not in self.config or "before" not in self.config["hooks"]:
+            return
+
+        for hook in self.config["hooks"]["before"]:
+            if dry_run:
+                print('Not running hook "{}" as dry run is enabled.'.format(hook))
+            else:
+                subprocess.run(hook, shell=True, check=True)
+
+    def hooks_after(self, dry_run: bool) -> None:
+        if "hooks" not in self.config or "after" not in self.config["hooks"]:
+            return
+
+        for hook in self.config["hooks"]["after"]:
+            if dry_run:
+                print('Not running hook "{}" as dry run is enabled.'.format(hook))
+            else:
+                subprocess.run(hook, shell=True, check=True)
+
+    def action_prune(self, dry_run: bool, stats: bool) -> None:
+        cmd = ["--list"]
+        cmd += ["--prefix", self.config["remote"]["prefix"]]
+
+        if dry_run:
+            cmd += ["--dry-run"]
+
+        if stats:
+            cmd += ["--stats"]
+
+        if "keep_last" in self.config["retention"]:
+            cmd += ["--keep-last", str(self.config["retention"]["keep_last"])]
+
+        if "keep_within" in self.config["retention"]:
+            cmd += ["--keep-within", str(self.config["retention"]["keep_within"])]
+
+        if "keep_hourly" in self.config["retention"]:
+            cmd += ["--keep-hourly", str(self.config["retention"]["keep_hourly"])]
+
+        if "keep_daily" in self.config["retention"]:
+            cmd += ["--keep-daily", str(self.config["retention"]["keep_daily"])]
+
+        if "keep_weekly" in self.config["retention"]:
+            cmd += ["--keep-weekly", str(self.config["retention"]["keep_weekly"])]
+
+        if "keep_monthly" in self.config["retention"]:
+            cmd += ["--keep-monthly", str(self.config["retention"]["keep_monthly"])]
+
+        if "keep_yearly" in self.config["retention"]:
+            cmd += ["--keep-yearly", str(self.config["retention"]["keep_yearly"])]
+
+        retries, retry_wait = self.config_get_retries()
+
+        for i in range(retries + 1):
+            try:
+                proc = self.run("prune", args=cmd, capture_stderr=True)
+                for line in proc.stderr.splitlines(keepends=True):
+                    if not line.startswith("Keeping archive:"):
+                        print(line, end="", file=sys.stderr)
+                break
+            except subprocess.CalledProcessError as exc:
+                if exc.stderr:
+                    print(exc.stderr, file=sys.stderr, flush=True)
+                print(
+                    "Backup prune failed with exit code {}".format(exc.returncode),
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+                if i == retries:
+                    sys.exit(exc.returncode)
+
+                if retry_wait == 0:
+                    print("Retrying prune ...", file=sys.stderr, flush=True)
+                else:
+                    print(
+                        "Retrying prune after {} min ..".format(retry_wait),
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    time.sleep(retry_wait * 60)
 
 
 def main() -> None:
@@ -391,26 +392,26 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    config = parse_config(args.config)
+    borgwrap = BorgWrap(args.config)
 
     if args.action == "create":
-        hooks_before(config, dry_run=args.dry_run)
-        action_create(config, dry_run=args.dry_run, stats=args.stats, list_files=args.list)
-        hooks_after(config, dry_run=args.dry_run)
+        borgwrap.hooks_before(dry_run=args.dry_run)
+        borgwrap.action_create(dry_run=args.dry_run, stats=args.stats, list_files=args.list)
+        borgwrap.hooks_after(dry_run=args.dry_run)
         if args.prune:
-            action_prune(config, dry_run=args.dry_run, stats=args.stats)
+            borgwrap.action_prune(dry_run=args.dry_run, stats=args.stats)
     elif args.action == "list":
-        action_list(config, args.details)
+        borgwrap.action_list(args.details)
     elif args.action == "prune":
-        action_prune(config, dry_run=args.dry_run, stats=args.stats)
+        borgwrap.action_prune(dry_run=args.dry_run, stats=args.stats)
     elif args.action == "nagios-check-age":
         if args.min_size:
             min_size = args.min_size
         else:
             min_size = None
-        action_check_age(config, max_age=args.max_age * 3600, min_size=min_size)
+        borgwrap.action_check_age(max_age=args.max_age * 3600, min_size=min_size)
     elif args.action == "cmd":
-        action_cmd(config, dry_run=args.dry_run, raw_args=args.raw)
+        borgwrap.action_cmd(dry_run=args.dry_run, raw_args=args.raw)
 
 
 if __name__ == "__main__":
