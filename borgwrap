@@ -88,7 +88,7 @@ class BorgWrap:
         capture_stdout: bool = False,
         capture_stderr: bool = False,
         timeout: Optional[int] = None,
-    ) -> subprocess.CompletedProcess:
+    ) -> 'subprocess.CompletedProcess[str]':
         args_list = args if args is not None else []
         trailing_args_list = trailing_args if trailing_args is not None else []
 
