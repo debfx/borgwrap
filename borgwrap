@@ -186,7 +186,7 @@ class BorgWrap:
                 break
             except subprocess.CalledProcessError as exc:
                 print(
-                    "Backup creation failed with exit code {}".format(exc.returncode),
+                    f"Backup creation failed with exit code {exc.returncode}",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -198,7 +198,7 @@ class BorgWrap:
                     print("Retrying backup ...", file=sys.stderr, flush=True)
                 else:
                     print(
-                        "Retrying backup after {} min ..".format(retry_wait),
+                        f"Retrying backup after {retry_wait} min ..",
                         file=sys.stderr,
                         flush=True,
                     )
@@ -262,22 +262,22 @@ class BorgWrap:
                 stderr_text = ""
             else:
                 stderr_text = exc.stderr.decode(errors="replace")
-            print("BORGBACKUP UNKNOWN - borgbackup command timed out\n\n{}".format(stderr_text))
+            print(f"BORGBACKUP UNKNOWN - borgbackup command timed out\n\n{stderr_text}")
             sys.exit(3)
 
         last_backup = yaml.safe_load(proc_result.stdout)
 
         backup_start = datetime.datetime.strptime(last_backup["archives"][0]["start"], "%Y-%m-%dT%H:%M:%S.%f")
         if (datetime.datetime.now() - backup_start).total_seconds() > max_age:
-            print("BORGBACKUP WARNING - last backup too old: {:%Y-%m-%dT%H:%M:%S}".format(backup_start))
+            print(f"BORGBACKUP WARNING - last backup too old: {backup_start:%Y-%m-%dT%H:%M:%S}")
             sys.exit(1)
 
         size = int(last_backup["archives"][0]["stats"]["original_size"] / 1024 / 1024)
         if min_size is not None and size < min_size:
-            print("BORGBACKUP WARNING - last backup too small\n\n{}M < {}M".format(size, min_size))
+            print(f"BORGBACKUP WARNING - last backup too small\n\n{size}M < {min_size}M")
             sys.exit(1)
 
-        print("BORGBACKUP OK - last backup on: {:%Y-%m-%dT%H:%M:%S}, size: {}M".format(backup_start, size))
+        print(f"BORGBACKUP OK - last backup on: {backup_start:%Y-%m-%dT%H:%M:%S}, size: {size}M")
         sys.exit(0)
 
     def action_cmd(self, dry_run: bool, raw_args: List[str]) -> None:
@@ -299,7 +299,7 @@ class BorgWrap:
 
         for hook in self.config["hooks"]["before"]:
             if dry_run:
-                print('Not running hook "{}" as dry run is enabled.'.format(hook))
+                print(f'Not running hook "{hook}" as dry run is enabled.')
             else:
                 subprocess.run(hook, shell=True, check=True)
 
@@ -309,7 +309,7 @@ class BorgWrap:
 
         for hook in self.config["hooks"]["after"]:
             if dry_run:
-                print('Not running hook "{}" as dry run is enabled.'.format(hook))
+                print(f'Not running hook "{hook}" as dry run is enabled.')
             else:
                 subprocess.run(hook, shell=True, check=True)
 
@@ -357,7 +357,7 @@ class BorgWrap:
                 if exc.stderr:
                     print(exc.stderr, file=sys.stderr, flush=True)
                 print(
-                    "Backup prune failed with exit code {}".format(exc.returncode),
+                    f"Backup prune failed with exit code {exc.returncode}",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -369,7 +369,7 @@ class BorgWrap:
                     print("Retrying prune ...", file=sys.stderr, flush=True)
                 else:
                     print(
-                        "Retrying prune after {} min ..".format(retry_wait),
+                        f"Retrying prune after {retry_wait} min ..",
                         file=sys.stderr,
                         flush=True,
                     )
