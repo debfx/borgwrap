@@ -120,7 +120,7 @@ class BorgWrap:
             timeout=timeout,
         )
 
-    def action_create(self, dry_run: bool, stats: bool, list_files: bool) -> None:
+    def action_create(self, dry_run: bool, stats: bool, list_files: bool) -> int:
         source = self.config["location"]["source"]
         if isinstance(source, str):
             source = [source]
@@ -183,8 +183,12 @@ class BorgWrap:
         for i in range(retries + 1):
             try:
                 self.run("create", archive=True, args=cmd, trailing_args=source)
-                break
+                return 0
             except subprocess.CalledProcessError as exc:
+                # only retry on errors, exit code 1 means a warning occurred
+                if exc.returncode == 1:
+                    return exc.returncode
+
                 print(
                     f"Backup creation failed with exit code {exc.returncode}",
                     file=sys.stderr,
@@ -433,10 +437,11 @@ def main() -> None:
 
     if args.action == "create":
         borgwrap.hooks_before(dry_run=args.dry_run)
-        borgwrap.action_create(dry_run=args.dry_run, stats=args.stats, list_files=args.list)
+        exit_code = borgwrap.action_create(dry_run=args.dry_run, stats=args.stats, list_files=args.list)
         borgwrap.hooks_after(dry_run=args.dry_run)
         if args.prune:
             borgwrap.action_prune(dry_run=args.dry_run, stats=args.stats)
+        sys.exit(exit_code)
     elif args.action == "list":
         borgwrap.action_list(args.details)
     elif args.action == "prune":
