@@ -13,6 +13,10 @@ from typing import Any, Dict, List, Optional, Tuple
 import yaml
 
 
+class HookFailedException(Exception):
+    pass
+
+
 class BorgWrap:
     def __init__(self, config_path: str) -> None:
         self.config = self.parse_config(config_path)
@@ -88,7 +92,7 @@ class BorgWrap:
         capture_stdout: bool = False,
         capture_stderr: bool = False,
         timeout: Optional[int] = None,
-    ) -> 'subprocess.CompletedProcess[str]':
+    ) -> "subprocess.CompletedProcess[str]":
         args_list = args if args is not None else []
         trailing_args_list = trailing_args if trailing_args is not None else []
 
@@ -213,7 +217,10 @@ class BorgWrap:
 
         if details:
             args += ["--json"]
-            proc_result = self.run("info", args=args, capture_stdout=True)
+            try:
+                proc_result = self.run("info", args=args, capture_stdout=True)
+            except subprocess.CalledProcessError as exc:
+                sys.exit(exc.returncode)
             archive_info = yaml.safe_load(proc_result.stdout)
 
             archives = []
@@ -246,7 +253,10 @@ class BorgWrap:
                     print(f"{archive[column] : <{column_sizes[column]}}", end="")
                 print()
         else:
-            self.run("list", args=args)
+            try:
+                self.run("list", args=args)
+            except subprocess.CalledProcessError as exc:
+                sys.exit(exc.returncode)
 
     def action_check_age(self, max_age: int, min_size: Optional[int]) -> None:
         try:
@@ -295,7 +305,8 @@ class BorgWrap:
         if dry_run:
             print('Not running command "{}" as dry run is enabled.'.format(" ".join(cmd)))
         else:
-            subprocess.run(cmd, check=True, env=env)
+            proc = subprocess.run(cmd, env=env)
+            sys.exit(proc.returncode)
 
     def hooks_before(self, dry_run: bool) -> None:
         if "hooks" not in self.config or "before" not in self.config["hooks"]:
@@ -305,7 +316,10 @@ class BorgWrap:
             if dry_run:
                 print(f'Not running hook "{hook}" as dry run is enabled.')
             else:
-                subprocess.run(hook, shell=True, check=True)
+                try:
+                    subprocess.run(hook, shell=True, check=True)
+                except subprocess.CalledProcessError as exc:
+                    raise HookFailedException(f'before hook "{hook}" failed with exit code {exc.returncode}')
 
     def hooks_after(self, dry_run: bool) -> None:
         if "hooks" not in self.config or "after" not in self.config["hooks"]:
@@ -315,7 +329,10 @@ class BorgWrap:
             if dry_run:
                 print(f'Not running hook "{hook}" as dry run is enabled.')
             else:
-                subprocess.run(hook, shell=True, check=True)
+                try:
+                    subprocess.run(hook, shell=True, check=True)
+                except subprocess.CalledProcessError as exc:
+                    raise HookFailedException(f'after hook "{hook}" failed with exit code {exc.returncode}')
 
     def action_prune(self, dry_run: bool, stats: bool) -> None:
         cmd = ["--list"]
@@ -380,7 +397,11 @@ class BorgWrap:
                     time.sleep(retry_wait * 60)
 
         if self.borg_version >= (1, 2, 0) and not dry_run:
-            self.run("compact")
+            try:
+                self.run("compact")
+            except subprocess.CalledProcessError as exc:
+                print("Compacting failed with exit code {exc.returncode}")
+                sys.exit(exc.returncode)
 
 
 def main() -> None:
@@ -436,12 +457,17 @@ def main() -> None:
     borgwrap = BorgWrap(args.config)
 
     if args.action == "create":
-        borgwrap.hooks_before(dry_run=args.dry_run)
-        exit_code = borgwrap.action_create(dry_run=args.dry_run, stats=args.stats, list_files=args.list)
-        borgwrap.hooks_after(dry_run=args.dry_run)
-        if args.prune:
-            borgwrap.action_prune(dry_run=args.dry_run, stats=args.stats)
-        sys.exit(exit_code)
+        try:
+            borgwrap.hooks_before(dry_run=args.dry_run)
+            exit_code = borgwrap.action_create(dry_run=args.dry_run, stats=args.stats, list_files=args.list)
+            borgwrap.hooks_after(dry_run=args.dry_run)
+            if args.prune:
+                borgwrap.action_prune(dry_run=args.dry_run, stats=args.stats)
+            sys.exit(exit_code)
+        except HookFailedException as exc:
+            print(exc)
+            # return borg error exit code
+            sys.exit(2)
     elif args.action == "list":
         borgwrap.action_list(args.details)
     elif args.action == "prune":
