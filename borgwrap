@@ -227,17 +227,18 @@ class BorgWrap:
             column_sizes = {}
             columns = ["Name", "Orig", "Comp", "Dedup", "Files", "Duration"]
 
-            for archive in archive_info["archives"]:
-                archives.append(
-                    {
-                        "Name": archive["name"],
-                        "Orig": self.human_readable_size(archive["stats"]["original_size"]),
-                        "Comp": self.human_readable_size(archive["stats"]["compressed_size"]),
-                        "Dedup": self.human_readable_size(archive["stats"]["deduplicated_size"]),
-                        "Files": str(archive["stats"]["nfiles"]),
-                        "Duration": f"{int(archive['duration'])}s",
-                    }
-                )
+            if archive_info is not None and len(archive_info["archives"]) != 0:
+                for archive in archive_info["archives"]:
+                    archives.append(
+                        {
+                            "Name": archive["name"],
+                            "Orig": self.human_readable_size(archive["stats"]["original_size"]),
+                            "Comp": self.human_readable_size(archive["stats"]["compressed_size"]),
+                            "Dedup": self.human_readable_size(archive["stats"]["deduplicated_size"]),
+                            "Files": str(archive["stats"]["nfiles"]),
+                            "Duration": f"{int(archive['duration'])}s",
+                        }
+                    )
 
             for column in columns:
                 max_len = len(column)
@@ -280,6 +281,10 @@ class BorgWrap:
             sys.exit(3)
 
         last_backup = yaml.safe_load(proc_result.stdout)
+
+        if last_backup is None or len(last_backup["archives"]) == 0:
+            print("BORGBACKUP CRITICAL - no backup found")
+            sys.exit(2)
 
         backup_start = datetime.datetime.strptime(last_backup["archives"][0]["start"], "%Y-%m-%dT%H:%M:%S.%f")
         if (datetime.datetime.now() - backup_start).total_seconds() > max_age:
