@@ -421,7 +421,7 @@ def main() -> None:
         action="store_true",
         help="Perform a trial run with no changes made",
     )
-    subparsers = parser.add_subparsers(dest="action")
+    subparsers = parser.add_subparsers(dest="action", required=True)
 
     parser_create = subparsers.add_parser("create", help="Create a backup archive")
     parser_create.add_argument("--prune", action="store_true", help="Run prune after creating a backup")
