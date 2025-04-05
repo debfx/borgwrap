@@ -260,12 +260,12 @@ class BorgWrap:
                     max_len = max(max_len, len(archive[column]))
                 column_sizes[column] = max_len + 4
 
-                print(f"{column : <{column_sizes[column]}}", end="")
+                print(f"{column: <{column_sizes[column]}}", end="")
 
             print()
             for archive in archives:
                 for column in columns:
-                    print(f"{archive[column] : <{column_sizes[column]}}", end="")
+                    print(f"{archive[column]: <{column_sizes[column]}}", end="")
                 print()
         else:
             try:
