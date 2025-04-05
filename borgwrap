@@ -83,6 +83,17 @@ class BorgWrap:
         else:
             return ["--prefix", self.config["remote"]["prefix"]]
 
+    def common_args(self) -> Tuple[List[str], Dict[str, str]]:
+        args = []
+        if "executable" in self.config["remote"]:
+            args.extend(["--remote-path", self.config["remote"]["executable"]])
+
+        env = {}
+        if "rsh" in self.config["remote"]:
+            env["BORG_RSH"] = self.config["remote"]["rsh"]
+
+        return args, env
+
     def run(
         self,
         action: str,
@@ -96,13 +107,13 @@ class BorgWrap:
         args_list = args if args is not None else []
         trailing_args_list = trailing_args if trailing_args is not None else []
 
+        common_args, common_env = self.common_args()
+
         repo = self.config["remote"]["repository"]
         if archive:
             repo += "::{}-{{utcnow:%Y-%m-%dT%H:%M:%SZ}}".format(self.config["remote"]["prefix"])
 
-        env = dict(os.environ)
-        if "rsh" in self.config["remote"]:
-            env["BORG_RSH"] = self.config["remote"]["rsh"]
+        env = {**os.environ, **common_env}
 
         if capture_stdout:
             stdout: Optional[int] = subprocess.PIPE
@@ -115,7 +126,7 @@ class BorgWrap:
             stderr = None
 
         return subprocess.run(
-            ["borg", action] + args_list + [repo] + trailing_args_list,
+            ["borg", action] + common_args + args_list + [repo] + trailing_args_list,
             check=True,
             env=env,
             stdout=stdout,
@@ -303,12 +314,12 @@ class BorgWrap:
         sys.exit(0)
 
     def action_cmd(self, dry_run: bool, raw_args: List[str]) -> None:
-        env = dict(os.environ)
-        if "rsh" in self.config["remote"]:
-            env["BORG_RSH"] = self.config["remote"]["rsh"]
+        common_args, common_env = self.common_args()
+        env = {**os.environ, **common_env}
+
         env["BORG_REPO"] = self.config["remote"]["repository"]
 
-        cmd = ["borg"] + raw_args
+        cmd = ["borg"] + common_args + raw_args
 
         if dry_run:
             print('Not running command "{}" as dry run is enabled.'.format(" ".join(cmd)))

@@ -14,6 +14,7 @@ location:
 remote:
   repository: user@hostname:/path/to/source
   prefix: root
+  executable: borg
   compression: lz4
   # limit upload rate (in kiByte/s)
   rate_limit: 1000
