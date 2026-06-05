@@ -79,7 +79,8 @@ class BorgWrap:
 
     def archive_prefix_args(self) -> List[str]:
         if self.borg_version >= (1, 2, 0):
-            return ["--glob-archives", self.config["remote"]["prefix"] + "*"]
+            prefix_escaped = re.sub(r"([*?[])", r"[\1]", self.config["remote"]["prefix"])
+            return ["--glob-archives", prefix_escaped + "*"]
         else:
             return ["--prefix", self.config["remote"]["prefix"]]
 
