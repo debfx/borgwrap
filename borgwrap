@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 import yaml
 
@@ -23,7 +23,7 @@ class BorgWrap:
         self.borg_version = self.determine_borg_version()
 
     @staticmethod
-    def parse_config(filename: str) -> Dict[str, Any]:
+    def parse_config(filename: str) -> dict[str, Any]:
         with open(filename) as file_config:
             return yaml.safe_load(file_config)  # type: ignore
 
@@ -38,7 +38,7 @@ class BorgWrap:
         else:
             return False
 
-    def config_get_retries(self) -> Tuple[int, int]:
+    def config_get_retries(self) -> tuple[int, int]:
         if "retries" in self.config["remote"]:
             retries = int(self.config["remote"]["retries"])
         else:
@@ -52,10 +52,8 @@ class BorgWrap:
         return retries, retry_wait
 
     @staticmethod
-    def determine_borg_version() -> Tuple[int, int, int]:
-        proc_result = subprocess.run(
-            ["borg", "--version"], check=True, universal_newlines=True, stdout=subprocess.PIPE
-        )
+    def determine_borg_version() -> tuple[int, int, int]:
+        proc_result = subprocess.run(["borg", "--version"], check=True, text=True, stdout=subprocess.PIPE)
         match = re.search(r"(\d+)\.(\d+)\.(\d+)", proc_result.stdout)
         if not match:
             raise Exception(f"unable to detect borg version: {proc_result.stdout}")
@@ -63,7 +61,7 @@ class BorgWrap:
         return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
 
     @staticmethod
-    def write_exclude_file(excludes: List[str]) -> Any:
+    def write_exclude_file(excludes: list[str]) -> Any:
         tmpfile = tempfile.NamedTemporaryFile("w", suffix="-borgwrap")
         tmpfile.write("\n".join(excludes) + "\n")
         tmpfile.flush()
@@ -77,14 +75,14 @@ class BorgWrap:
             num /= 1024.0
         return f"{int(num)}Zi{suffix}"
 
-    def archive_prefix_args(self) -> List[str]:
+    def archive_prefix_args(self) -> list[str]:
         if self.borg_version >= (1, 2, 0):
             prefix_escaped = re.sub(r"([*?[])", r"[\1]", self.config["remote"]["prefix"])
             return ["--glob-archives", prefix_escaped + "*"]
         else:
             return ["--prefix", self.config["remote"]["prefix"]]
 
-    def common_args(self) -> Tuple[List[str], Dict[str, str]]:
+    def common_args(self) -> tuple[list[str], dict[str, str]]:
         args = []
         if "executable" in self.config["remote"]:
             args.extend(["--remote-path", self.config["remote"]["executable"]])
@@ -99,8 +97,8 @@ class BorgWrap:
         self,
         action: str,
         archive: bool = False,
-        args: Optional[List[str]] = None,
-        trailing_args: Optional[List[str]] = None,
+        args: Optional[list[str]] = None,
+        trailing_args: Optional[list[str]] = None,
         capture_stdout: bool = False,
         capture_stderr: bool = False,
         timeout: Optional[int] = None,
@@ -132,7 +130,7 @@ class BorgWrap:
             env=env,
             stdout=stdout,
             stderr=stderr,
-            universal_newlines=True,
+            text=True,
             timeout=timeout,
         )
 
@@ -314,7 +312,7 @@ class BorgWrap:
         print(f"BORGBACKUP OK - last backup on: {backup_start:%Y-%m-%dT%H:%M:%S}, size: {size}M")
         sys.exit(0)
 
-    def action_cmd(self, dry_run: bool, raw_args: List[str]) -> None:
+    def action_cmd(self, dry_run: bool, raw_args: list[str]) -> None:
         common_args, common_env = self.common_args()
         env = {**os.environ, **common_env}
 

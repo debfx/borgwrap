@@ -2,7 +2,7 @@
 
 borgwrap is yet another thin wrapper around [borgbackup](https://github.com/borgbackup/borg).
 
-It depends only on Python 3 and PyYAML.
+It depends only on Python >= 3.9 and PyYAML.
 
 
 # Usage
